@@ -173,8 +173,7 @@ mathplotlib callback for populating a new frame.
 
 :param frame: frame data
 """
-min_value = None
-max_value = None
+cmap_range = [None, None]
 
 def animate(frame):
     try:
@@ -209,28 +208,31 @@ def animate(frame):
         array = np.array(unpack("<"+"h"*(len(sensor_data)//2), sensor_data), dtype=np.short)[:sensor_nodes].reshape([information_block.matrix_x_size, information_block.matrix_y_size])
         image.set_array(array)
         if args.auto_clim:
-            global min_value
-            global max_value
-            if min_value is None:
-                min_value = array.min()
+            global cmap_range
+            new_range = cmap_range.copy()
+            if new_range[0] is None:
+                new_range[0] = array.min()
             else:
-                min_value = min(min_value, array.min())
-            if max_value is None:
-                max_value = array.min()
+                new_range[0] = min(new_range[0], array.min())
+            if new_range[1] is None:
+                new_range[1] = array.max()
             else:
-                max_value = max(max_value, array.max())
-            image.set_clim(vmin=min_value, vmax=max_value)
-    except:
+                new_range[1] = min(new_range[1], array.max())
+            if new_range != cmap_range:
+                cmap_range = new_range
+                print(f"Heatmap range {cmap_range[0]}..{cmap_range[1]}")
+                image.set_clim(vmin=cmap_range[0], vmax=cmap_range[1])
+    except Exception as e:
         sys.exit(1)
     return image,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--ref", help="Show reference signal.", action="store_true")
-    parser.add_argument("-c", "--clim", help="Heatmap colour limit (default: -128..127, or 0..28000 for reference mode).", type=int, nargs=2)
+    parser.add_argument("-c", "--clim", help="Heatmap colour limit (default: -128..127, or 0..32000 for reference mode).", type=int, nargs=2)
     parser.add_argument("-a", "--auto-clim", help="Auto Heatmap colour limit based on the min/max values in the image.", action="store_true")
     parser.add_argument("-R", "--recalibrate", help="Force recalibration before starting.", action="store_true")
-    parser.add_argument("--cmap", help="Specify a matplotlib colour map for the heatmap (default: RdBu, or Blues for reference mode).")
+    parser.add_argument("--cmap", help="Specify a matplotlib colour map for the heatmap (default: RdBu, or Blues for reference mode).p")
     args = parser.parse_args()
 
     """
@@ -277,7 +279,7 @@ if __name__ == '__main__':
             image.set_clim(vmin=args.clim[0], vmax=args.clim[1])
         else:
             if args.ref:
-                image.set_clim(vmin=0, vmax=28000)
+                image.set_clim(vmin=0, vmax=32000)
             else:
                 image.set_clim(vmin=-128, vmax=127)
         anim = animation.FuncAnimation(
