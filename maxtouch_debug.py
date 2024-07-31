@@ -173,6 +173,9 @@ mathplotlib callback for populating a new frame.
 
 :param frame: frame data
 """
+min_value = None
+max_value = None
+
 def animate(frame):
     try:
         # Set the debug mode via the "diagnostic" register in the command object. This sets the page to 0.
@@ -196,6 +199,8 @@ def animate(frame):
             if debug_object[0] != 37 and debug_object[1] != page:
                 time.sleep(0.1)
                 debug_object = read_object(37)
+                if debug_object[0] != 37 and debug_object[1] != page:
+                    print("Got unexpected page..")
             sensor_data += debug_object[2:]
             # After we have read 128 bytes, we need to advance to the next page.
             if page < (pages-1):
@@ -203,6 +208,18 @@ def animate(frame):
 
         array = np.array(unpack("<"+"h"*(len(sensor_data)//2), sensor_data), dtype=np.short)[:sensor_nodes].reshape([information_block.matrix_x_size, information_block.matrix_y_size])
         image.set_array(array)
+        if args.auto_clim:
+            global min_value
+            global max_value
+            if min_value is None:
+                min_value = array.min()
+            else:
+                min_value = min(min_value, array.min())
+            if max_value is None:
+                max_value = array.min()
+            else:
+                max_value = max(max_value, array.max())
+            image.set_clim(vmin=min_value, vmax=max_value)
     except:
         sys.exit(1)
     return image,
@@ -210,9 +227,12 @@ def animate(frame):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--ref", help="Show reference signal.", action="store_true")
-    parser.add_argument("-c", "--clim", help="Heatmap colour limit (default: -128..127, or -4096..4095 for refrence mode).", type=int, nargs=2)
+    parser.add_argument("-c", "--clim", help="Heatmap colour limit (default: -128..127, or 0..28000 for reference mode).", type=int, nargs=2)
+    parser.add_argument("-a", "--auto-clim", help="Auto Heatmap colour limit based on the min/max values in the image.", action="store_true")
     parser.add_argument("-R", "--recalibrate", help="Force recalibration before starting.", action="store_true")
+    parser.add_argument("--cmap", help="Specify a matplotlib colour map for the heatmap (default: RdBu, or Blues for reference mode).")
     args = parser.parse_args()
+
     """
     Find a device, for now this is not configurable.
     """
@@ -251,12 +271,13 @@ if __name__ == '__main__':
         sensor_nodes = information_block.matrix_x_size * information_block.matrix_y_size
         array = np.zeros(shape=(information_block.matrix_x_size, information_block.matrix_y_size))
         fig = plt.figure()
-        image = plt.imshow(array, interpolation='none', animated=True, cmap="RdBu")
+        cmap = args.cmap if args.cmap else "Blues" if args.ref else "RdBu"
+        image = plt.imshow(array, interpolation='none', animated=True, cmap=cmap)
         if args.clim:
             image.set_clim(vmin=args.clim[0], vmax=args.clim[1])
         else:
             if args.ref:
-                image.set_clim(vmin=-4096, vmax=4095)
+                image.set_clim(vmin=0, vmax=28000)
             else:
                 image.set_clim(vmin=-128, vmax=127)
         anim = animation.FuncAnimation(
