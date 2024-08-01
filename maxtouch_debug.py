@@ -55,7 +55,7 @@ product_id    = 0x0000
 
 usage_page    = 0xFF60
 usage         = 0x61
-report_length = 32
+report_length = 33
 
 """
 Connect to the first candidate device we find.
@@ -103,8 +103,8 @@ The rawhid packets are 32 bytes, so the operation will be fragmented.
 """
 def write_data(address, data):
     length = len(data)
-    for offset in range(0, len(data), report_length - 4):
-        write_length = min(length, report_length - 4)
+    for offset in range(0, len(data), report_length - 5):
+        write_length = min(length, report_length - 5)
         request = bytes([0x00, 0x3, (address + offset) & 0xff, (address + offset) >> 8, write_length]) + data[offset:write_length+offset]
         if len(request) < report_length:
             request += bytes([0x00]) * (report_length - len(request))
@@ -126,9 +126,9 @@ The rawhid packets are 32 bytes, so the operation will be fragmented.
 """
 def read_data(address, length):
     result = []
-    for offset in range(0, length, report_length - 4):
-        read_length = min(length, report_length - 4)
-        request = bytes([0x00, 0x2, (address + offset) & 0xff, (address + offset) >> 8, read_length] + [0x00] * (report_length - 4))
+    for offset in range(0, length, report_length - 5):
+        read_length = min(length, report_length - 5)
+        request = bytes([0x00, 0x2, (address + offset) & 0xff, (address + offset) >> 8, read_length] + [0x00] * (report_length - 5))
         interface.write(request)
         response = interface.read(report_length, timeout=1000)
         if (response[0] != 0):
