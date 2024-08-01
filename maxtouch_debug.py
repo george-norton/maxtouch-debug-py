@@ -9,6 +9,7 @@ import matplotlib.animation as animation
 import time
 import math
 import argparse
+import traceback
 
 """
  Support parsing a few useful structures which we read/write.
@@ -54,7 +55,7 @@ product_id    = 0x0000
 
 usage_page    = 0xFF60
 usage         = 0x61
-report_length = 32
+report_length = 33
 
 """
 Connect to the first candidate device we find.
@@ -89,7 +90,7 @@ def check_version():
     interface.write(bytes(data))
     response = interface.read(report_length, timeout=1000)
     if (response[0] != 0):
-        raise Exception("Device reported error code "+str(response[0])) 
+        raise Exception("Device reported error code "+str(response[0]))
 
 """
 The debug interface proxies I2C operations over the rawhid interface. This
@@ -102,9 +103,9 @@ The rawhid packets are 32 bytes, so the operation will be fragmented.
 """
 def write_data(address, data):
     length = len(data)
-    for offset in range(0, len(data), report_length - 4):
-        write_length = min(length, report_length - 4)
-        request = bytes([0x3, (address + offset) & 0xff, (address + offset) >> 8, write_length]) + data[offset:write_length+offset]
+    for offset in range(0, len(data), report_length - 5):
+        write_length = min(length, report_length - 5)
+        request = bytes([0x00, 0x3, (address + offset) & 0xff, (address + offset) >> 8, write_length]) + data[offset:write_length+offset]
         if len(request) < report_length:
             request += bytes([0x00]) * (report_length - len(request))
         interface.write(request)
@@ -125,9 +126,9 @@ The rawhid packets are 32 bytes, so the operation will be fragmented.
 """
 def read_data(address, length):
     result = []
-    for offset in range(0, length, report_length - 4):
-        read_length = min(length, report_length - 4)
-        request = bytes([0x2, (address + offset) & 0xff, (address + offset) >> 8, read_length] + [0x00] * (report_length - 4))
+    for offset in range(0, length, report_length - 5):
+        read_length = min(length, report_length - 5)
+        request = bytes([0x00, 0x2, (address + offset) & 0xff, (address + offset) >> 8, read_length] + [0x00] * (report_length - 5))
         interface.write(request)
         response = interface.read(report_length, timeout=1000)
         if (response[0] != 0):
@@ -223,6 +224,7 @@ def animate(frame):
                 print(f"Heatmap range {cmap_range[0]}..{cmap_range[1]}")
                 image.set_clim(vmin=cmap_range[0], vmax=cmap_range[1])
     except Exception as e:
+        print(traceback.format_exc())
         sys.exit(1)
     return image,
 
@@ -248,6 +250,7 @@ if __name__ == '__main__':
         information_block = InformationBlock.from_buffer_copy(read_data(0, ctypes.sizeof(InformationBlock)))
         object_table = {}
         print(f"Sensor size is {information_block.matrix_x_size}x{information_block.matrix_y_size}")
+
         for index in range(information_block.num_objects):
             address = ctypes.sizeof(InformationBlock) + ctypes.sizeof(ObjectTableElement) * index
             object_table_entry = ObjectTableElement.from_buffer_copy(read_data(address, ctypes.sizeof(ObjectTableElement)))
@@ -285,8 +288,9 @@ if __name__ == '__main__':
         anim = animation.FuncAnimation(
                 fig,
                 animate,
-                interval = 0, # in ms - run as fast as we can
+                interval = 1, # in ms - run as fast as we can
                 blit = True,
                 cache_frame_data = False
                 )
+
         plt.show()
